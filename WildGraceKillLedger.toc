@@ -1,0 +1,13 @@
+## Interface: 120105
+## Title: Wild Grace Kill Ledger
+## Notes: Permanent log of your AOTC boss kills and how many AOTCs each one granted.
+## Version: 0.1.0
+## SavedVariables: KillLedgerDB
+## IconTexture: Interface\AddOns\WildGraceKillLedger\icon
+## AddonCompartmentFunc: KillLedger_OnCompartmentClick
+
+Data.lua
+Core.lua
+UI.lua
+UI_Panels.lua
+MinimapButton.lua

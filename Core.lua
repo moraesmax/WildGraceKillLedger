@@ -19,6 +19,8 @@ local function InitDB()
   DB.tracked = DB.tracked or {}
   DB.trackedInfo = DB.trackedInfo or {}
   DB.goals = DB.goals or {}
+  DB.manual = DB.manual or {}
+  DB.bossNames = DB.bossNames or {}
   DB.goalShow = DB.goalShow or {}
   DB.viewers = DB.viewers or {}
   local v = DB.viewers

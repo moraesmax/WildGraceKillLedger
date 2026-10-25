@@ -19,20 +19,25 @@ function KL.AotcTotals()
   return t
 end
 
--- Every boss that is tracked or has logged kills, with its total and target.
+-- Every boss that is tracked, has logged kills, or has a saved target/manual value.
+-- count = logged kills + the manual value the streamer typed in.
 function KL.GoalBosses()
   local db, totals, seen, out = KL.db, KL.AotcTotals(), {}, {}
   local function add(key, name, raid)
     if seen[key] then return end
     seen[key] = true
-    out[#out + 1] = { key = key, name = name or key, raid = raid or "", count = totals[key] or 0,
-                      goal = db.goals[key], tracked = db.tracked[key] and true or false }
+    local logged, manual = totals[key] or 0, db.manual[key] or 0
+    out[#out + 1] = { key = key, name = name or key, raid = raid or "", logged = logged, manual = manual,
+                      count = logged + manual, goal = db.goals[key], tracked = db.tracked[key] and true or false }
   end
   for key, b in pairs(db.trackedInfo) do add(key, b.name, b.raid) end
   for _, k in ipairs(db.kills) do add(k.boss, k.bossName, k.raid) end
+  for key, b in pairs(db.bossNames) do add(key, b.name, b.raid) end
   table.sort(out, function(a, b) return a.name < b.name end)
   return out
 end
+
+local function Remember(b) KL.db.bossNames[b.key] = { name = b.name, raid = b.raid } end
 
 local function ShownItems()
   local out = {}
@@ -200,52 +205,64 @@ function UI.BuildViewers()
   local db = KL.db
   p.rows = {}
   local intro = UI.Label(p, MUTED .. "Set a target for each boss. Only bosses with a target and Show ticked appear on screen.|r", "GameFontHighlightSmall")
-  intro:SetPoint("TOPLEFT", 8, -2); intro:SetWidth(430); intro:SetWordWrap(true)
-  for _, h in ipairs({ { "BOSS", 8 }, { "AOTCs", 196 }, { "TARGET", 256 }, { "PROGRESS", 334 }, { "SHOW", 410 } }) do
+  intro:SetPoint("TOPLEFT", 8, -2); intro:SetWidth(470); intro:SetWordWrap(true)
+  for _, h in ipairs({ { "BOSS", 8 }, { "LOGGED", 152 }, { "MANUAL", 200 }, { "TOTAL", 262 }, { "TARGET", 304 }, { "PROGRESS", 372 }, { "SHOW", 440 } }) do
     UI.Label(p, MUTED .. h[1] .. "|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", h[2], -40)
   end
   for i = 1, ROWS_PER_PAGE do
     local row = CreateFrame("Frame", nil, p); row.i = i
-    row:SetSize(440, 42); row:SetPoint("TOPLEFT", 0, -58 - (i - 1) * 42)
+    row:SetSize(480, 42); row:SetPoint("TOPLEFT", 0, -58 - (i - 1) * 42)
     local line = row:CreateTexture(nil, "ARTWORK"); line:SetColorTexture(C.line[1], C.line[2], C.line[3], 1)
     line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT"); line:SetHeight(1)
-    row.name = UI.Label(row, ""); row.name:SetPoint("TOPLEFT", 8, -5); row.name:SetWidth(180); row.name:SetWordWrap(false)
-    row.raid = UI.Label(row, "", "GameFontHighlightSmall"); row.raid:SetPoint("BOTTOMLEFT", 8, 5); row.raid:SetWidth(180); row.raid:SetWordWrap(false)
-    row.count = UI.Label(row, "", "GameFontNormal"); row.count:SetPoint("LEFT", 196, 0)
-    row.edit = UI.Input(row, 66, "No goal"); row.edit:SetPoint("LEFT", 252, 0)
+    row.name = UI.Label(row, ""); row.name:SetPoint("TOPLEFT", 8, -5); row.name:SetWidth(138); row.name:SetWordWrap(false)
+    row.raid = UI.Label(row, "", "GameFontHighlightSmall"); row.raid:SetPoint("BOTTOMLEFT", 8, 5); row.raid:SetWidth(138); row.raid:SetWordWrap(false)
+    row.logged = UI.Label(row, "", "GameFontHighlight"); row.logged:SetPoint("LEFT", 152, 0)
+    row.manualEdit = UI.Input(row, 54, "0"); row.manualEdit:SetPoint("LEFT", 198, 0)
+    row.manualEdit:SetNumeric(true); row.manualEdit:SetMaxLetters(6); row.manualEdit:SetJustifyH("RIGHT")
+    row.manualEdit:HookScript("OnTextChanged", function(self, user)
+      if not user or not row.b then return end
+      local n = tonumber(self:GetText())
+      db.manual[row.b.key] = (n and n > 0) and math.floor(n) or nil
+      Remember(row.b)
+      UI.RefreshViewers(); UI.RefreshDisplay()
+    end)
+    row.total = UI.Label(row, "", "GameFontNormal"); row.total:SetPoint("LEFT", 262, 0)
+    row.edit = UI.Input(row, 58, "No goal"); row.edit:SetPoint("LEFT", 302, 0)
     row.edit:SetNumeric(true); row.edit:SetMaxLetters(7); row.edit:SetJustifyH("RIGHT")
     row.edit:HookScript("OnTextChanged", function(self, user)
       if not user or not row.b then return end
       local n = tonumber(self:GetText())
       if n and n > 0 then
         db.goals[row.b.key] = math.floor(n)
+        Remember(row.b)
         if db.goalShow[row.b.key] == nil then db.goalShow[row.b.key] = true end
       else
         db.goals[row.b.key] = nil
       end
       UI.RefreshViewers(); UI.RefreshDisplay()
     end)
-    row.track, row.fill = MakeBar(row); row.track:SetSize(70, 10); row.track:SetPoint("TOPLEFT", 334, -12)
-    row.pct = UI.Label(row, "", "GameFontHighlightSmall"); row.pct:SetPoint("TOPLEFT", 334, -24)
+    row.track, row.fill = MakeBar(row); row.track:SetSize(64, 10); row.track:SetPoint("TOPLEFT", 372, -12)
+    row.pct = UI.Label(row, "", "GameFontHighlightSmall"); row.pct:SetPoint("TOPLEFT", 372, -24)
     row.show = UI.Check(row, "", function(v)
       if row.b then db.goalShow[row.b.key] = v and true or false end
       UI.RefreshViewers(); UI.RefreshDisplay()
     end)
-    row.show:SetPoint("LEFT", 412, 0)
+    row.show:SetPoint("LEFT", 442, 0)
     p.rows[i] = row
   end
-  UI.Label(p, MUTED .. "AOTCs is the total from your log for that boss. Deleted kills do not count.|r", "GameFontHighlightSmall"):SetPoint("BOTTOMLEFT", 8, 34)
+  local foot = UI.Label(p, MUTED .. "LOGGED is counted from your log (deleted kills do not count). MANUAL is added on top, for AOTCs from before the addon or kills it missed. TOTAL is what viewers see.|r", "GameFontHighlightSmall")
+  foot:SetPoint("BOTTOMLEFT", 8, 34); foot:SetWidth(470); foot:SetWordWrap(true)
   p.prev = UI.Button(p, "<", 28, 24, function() UI.goalPage = UI.goalPage - 1; UI.RefreshViewers() end); p.prev:SetPoint("BOTTOMLEFT", 8, 4)
   p.pageText = UI.Label(p, "", "GameFontHighlightSmall"); p.pageText:SetPoint("LEFT", p.prev, "RIGHT", 10, 0)
   p.next = UI.Button(p, ">", 28, 24, function() UI.goalPage = UI.goalPage + 1; UI.RefreshViewers() end); p.next:SetPoint("LEFT", p.prev, "RIGHT", 90, 0)
 
   -- right column: display settings
-  local X = 470
+  local X, W = 500, 252
   UI.Label(p, GOLD .. "Viewer display|r", "GameFontNormalLarge"):SetPoint("TOPLEFT", X, -2)
   p.chipShow = UI.Button(p, "Show on screen", 130, 26, function()
     db.viewers.show = not db.viewers.show; UI.RefreshAll()
   end, "chipOn"); p.chipShow:SetPoint("TOPLEFT", X, -30)
-  p.chipMove = UI.Button(p, "Move", 110, 26, function()
+  p.chipMove = UI.Button(p, "Move", 114, 26, function()
     UI.displayUnlocked = not UI.displayUnlocked
     if UI.displayUnlocked then db.viewers.show = true end
     UI.RefreshAll()
@@ -254,40 +271,41 @@ function UI.BuildViewers()
   UI.Label(p, MUTED .. "LAYOUT|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -68)
   p.layoutChips = {}
   local lx = X
-  for _, o in ipairs({ { "card", "Card", 62 }, { "all", "All bosses", 94 }, { "slim", "Slim bar", 84 } }) do
+  for _, o in ipairs({ { "card", "Card", 58 }, { "all", "All bosses", 92 }, { "slim", "Slim bar", 82 } }) do
     local b = UI.Button(p, o[2], o[3], 26, function() db.viewers.layout = o[1]; UI.RefreshAll() end, "chipOff")
     b:SetPoint("TOPLEFT", lx, -86); lx = lx + o[3] + 8; p.layoutChips[o[1]] = b
   end
 
-  UI.Label(p, MUTED .. "BACKGROUND|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -124)
+  UI.Label(p, MUTED .. "BACKGROUND / SIZE|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -124)
   p.bgChips = {}
   local bx = X
-  for _, o in ipairs({ { "dark", "Dark", 56 }, { "transparent", "Transparent", 96 } }) do
+  for _, o in ipairs({ { "dark", "Dark", 54 }, { "transparent", "Transparent", 94 } }) do
     local b = UI.Button(p, o[2], o[3], 26, function() db.viewers.bg = o[1]; UI.RefreshAll() end, "chipOff")
     b:SetPoint("TOPLEFT", bx, -142); bx = bx + o[3] + 8; p.bgChips[o[1]] = b
   end
-  local size = UI.Cycle(p, 100, function() return ("Size: %d%%"):format((db.viewers.scale or 1) * 100) end,
+  local size = UI.Cycle(p, 90, function() return ("Size: %d%%"):format((db.viewers.scale or 1) * 100) end,
     function(dir) db.viewers.scale = UI.CycleList(SIZES, db.viewers.scale or 1, dir) end)
-  size:SetPoint("TOPLEFT", X + 172, -142)
+  size:SetPoint("TOPLEFT", X + 164, -142)
 
   UI.Label(p, MUTED .. "MESSAGE|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -182)
-  p.msg = UI.Input(p, 282); p.msg:SetPoint("TOPLEFT", X, -200); p.msg:SetMaxLetters(200)
+  p.msg = UI.Input(p, W); p.msg:SetPoint("TOPLEFT", X, -200); p.msg:SetMaxLetters(200)
   p.msg:HookScript("OnTextChanged", function(self, user)
     if user then db.viewers.message = self:GetText(); UI.RefreshViewers(); UI.RefreshDisplay() end
   end)
-  UI.Label(p, MUTED .. "You can use {boss}, {current}, {goal} and {percent}|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -228)
+  UI.Label(p, MUTED .. "Use {boss}, {current}, {goal}, {percent}|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -228)
   UI.Label(p, MUTED .. "TITLE (ALL BOSSES LAYOUT)|r", "GameFontHighlightSmall"):SetPoint("TOPLEFT", X, -252)
-  p.title = UI.Input(p, 282); p.title:SetPoint("TOPLEFT", X, -270); p.title:SetMaxLetters(100)
+  p.title = UI.Input(p, W); p.title:SetPoint("TOPLEFT", X, -270); p.title:SetMaxLetters(100)
   p.title:HookScript("OnTextChanged", function(self, user)
     if user then db.viewers.title = self:GetText(); UI.RefreshViewers(); UI.RefreshDisplay() end
   end)
 
   p.prevCaption = UI.Label(p, MUTED .. "PREVIEW|r", "GameFontHighlightSmall"); p.prevCaption:SetPoint("TOPLEFT", X, -314)
-  local box = UI.Box(p); box:SetSize(282, 84); box:SetPoint("TOPLEFT", X, -332)
+  local box = UI.Box(p); box:SetSize(W, 84); box:SetPoint("TOPLEFT", X, -332)
   box:SetBackdropColor(C.bg[1], C.bg[2], C.bg[3], 1); box:SetBackdropBorderColor(C.gold[1], C.gold[2], C.gold[3], 1)
-  p.prevText = FS(box, 14, HEAD, C.text); p.prevText:SetPoint("TOPLEFT", 12, -12); p.prevText:SetWidth(258)
-  p.prevTrack, p.prevFill = MakeBar(box); p.prevTrack:SetSize(258, 10); p.prevTrack:SetPoint("BOTTOMLEFT", 12, 26)
+  p.prevText = FS(box, 14, HEAD, C.text); p.prevText:SetPoint("TOPLEFT", 12, -12); p.prevText:SetWidth(W - 24)
+  p.prevTrack, p.prevFill = MakeBar(box); p.prevTrack:SetSize(W - 24, 10); p.prevTrack:SetPoint("BOTTOMLEFT", 12, 26)
   p.prevSub = FS(box, 11, BODY, C.muted); p.prevSub:SetPoint("BOTTOMLEFT", 12, 8)
+  p.prevW = W - 24
 end
 
 function UI.RefreshViewers()
@@ -302,10 +320,12 @@ function UI.RefreshViewers()
     if b then
       row.name:SetText(b.name)
       row.raid:SetText(MUTED .. b.raid .. (b.tracked and "" or "  (not tracked)") .. "|r")
-      row.count:SetText(tostring(b.count))
+      row.logged:SetText(tostring(b.logged))
+      if not row.manualEdit:HasFocus() then row.manualEdit:SetText(b.manual > 0 and tostring(b.manual) or "") end
+      row.total:SetText(tostring(b.count))
       if not row.edit:HasFocus() then row.edit:SetText(b.goal and tostring(b.goal) or "") end
       if b.goal then
-        row.track:Show(); SetBar(row.fill, 70, b.count, b.goal)
+        row.track:Show(); SetBar(row.fill, 64, b.count, b.goal)
         row.pct:SetText(MUTED .. math.floor(b.count / b.goal * 100) .. "%|r")
       else
         row.track:Hide(); row.fill:Hide(); row.pct:SetText(MUTED .. "Not shown|r")
@@ -334,7 +354,7 @@ function UI.RefreshViewers()
   local b = sample or { name = "Ula'tek", count = 345, goal = 2000 }
   p.prevCaption:SetText(MUTED .. (sample and "PREVIEW" or "PREVIEW (SAMPLE NUMBERS)") .. "|r")
   p.prevText:SetText(Message(b)); p.prevSub:SetText(Sub(b))
-  SetBar(p.prevFill, 258, b.count, b.goal)
+  SetBar(p.prevFill, p.prevW, b.count, b.goal)
 end
 
 local ev = CreateFrame("Frame")

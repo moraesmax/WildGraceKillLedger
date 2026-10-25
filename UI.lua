@@ -174,14 +174,14 @@ function UI.Build()
   local hl = HLine(header); hl:SetPoint("BOTTOMLEFT"); hl:SetPoint("BOTTOMRIGHT")
   UI.Label(header, "Wild Grace Kill Ledger", "GameFontNormalLarge"):SetPoint("LEFT", 16, 0)
   local close = UI.Button(header, "x", 28, 28, function() f:Hide() end, "ghost"); close:SetPoint("RIGHT", -8, 0)
-  for i, n in ipairs({ "Log", "Bosses", "Stats", "Export" }) do
+  for i, n in ipairs({ "Log", "Bosses", "Viewers", "Stats", "Export" }) do
     local p = CreateFrame("Frame", nil, f)
     p:SetPoint("TOPLEFT", 14, -58); p:SetPoint("BOTTOMRIGHT", -14, 14); p:Hide()
     p.tab = MakeTab(header, n, function() UI.ShowTab(n) end)
-    p.tab:SetPoint("RIGHT", header, "RIGHT", -44 - (4 - i) * 80, 0)
+    p.tab:SetPoint("RIGHT", header, "RIGHT", -44 - (5 - i) * 80, 0)
     UI.panels[n] = p
   end
-  UI.BuildLog(); UI.BuildBosses(); UI.BuildStats(); UI.BuildExport()
+  UI.BuildLog(); UI.BuildBosses(); UI.BuildViewers(); UI.BuildStats(); UI.BuildExport()
   UI.ShowTab("Log")
 end
 
@@ -198,6 +198,7 @@ function UI.RefreshAll()
     if r and UI.frame:IsShown() then r() end
   end
   if UI.detail and UI.detail:IsShown() then UI.RefreshDetail() end
+  if UI.RefreshDisplay then UI.RefreshDisplay() end
 end
 
 function KL.Toggle()
@@ -383,7 +384,7 @@ function UI.ShowDetail(kill)
   d.kill = kill; d:Show(); UI.RefreshDetail()
 end
 
-function UI.OnKill(kill) UI.ShowDetail(kill) end
+function UI.OnKill(kill) UI.ShowDetail(kill); UI.RefreshDisplay() end
 function UI.UpdateToast() UI.RefreshAll() end   -- called by Core whenever a kill's count changes
 
 function UI.RefreshDetail()

@@ -207,7 +207,7 @@ function UI.BuildExport()
   UI.Button(p, "Import and merge", 140, 24, function()
     local a, s, b = KL.Import(p.inp.edit:GetText())
     p.result:SetText(("%d added, %d already present, %d unreadable lines."):format(a, s, b))
-    p.inp.edit:SetText(""); UI.RefreshExport()
+    p.inp.edit:SetText(""); UI.RefreshExport(); UI.RefreshAll()
   end, "primary"):SetPoint("BOTTOMRIGHT", -4, 4)
 end
 

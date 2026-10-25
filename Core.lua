@@ -18,6 +18,16 @@ local function InitDB()
   DB.kills = DB.kills or {}
   DB.tracked = DB.tracked or {}
   DB.trackedInfo = DB.trackedInfo or {}
+  DB.goals = DB.goals or {}
+  DB.goalShow = DB.goalShow or {}
+  DB.viewers = DB.viewers or {}
+  local v = DB.viewers
+  if v.show == nil then v.show = true end
+  v.layout = v.layout or "card"
+  v.bg = v.bg or "dark"
+  v.scale = v.scale or 1
+  v.message = v.message or "{boss} AoTCs earned this season: {current}/{goal}"
+  v.title = v.title or "AoTCs earned this season"
   DB.learned = DB.learned or {}
   DB.learnedAch = DB.learnedAch or {}
   DB.achOverride = DB.achOverride or {}
@@ -231,11 +241,19 @@ end
 
 function KL.DeleteKill(id)
   for i, k in ipairs(DB.kills) do
-    if k.id == id then table.remove(DB.kills, i); KL.lastDeleted = k; return true end
+    if k.id == id then
+      table.remove(DB.kills, i); KL.lastDeleted = k
+      if KL.UI and KL.UI.RefreshAll then KL.UI.RefreshAll() end
+      return true
+    end
   end
 end
 function KL.Undo()
-  if KL.lastDeleted then table.insert(DB.kills, KL.lastDeleted); KL.lastDeleted = nil; return true end
+  if KL.lastDeleted then
+    table.insert(DB.kills, KL.lastDeleted); KL.lastDeleted = nil
+    if KL.UI and KL.UI.RefreshAll then KL.UI.RefreshAll() end
+    return true
+  end
 end
 
 function KL.Stats(kills)
@@ -356,6 +374,7 @@ SlashCmdList["KILLLEDGER"] = function(msg)
   cmd = cmd:lower()
   if cmd == "" then KL.Toggle()
   elseif cmd == "minimap" then KL.ToggleMinimap()
+  elseif cmd == "viewers" then KL.UI.ToggleDisplay()
   elseif cmd == "undo" then Print(KL.Undo() and "last deleted kill restored." or "nothing to undo.")
   elseif cmd == "test" then
     local b = KL.KnownBosses()[1]
@@ -387,6 +406,6 @@ SlashCmdList["KILLLEDGER"] = function(msg)
     Print("scanning achievements for '" .. rest .. "'...")
     scan()
   else
-    Print("/kl  open | /kl undo | /kl minimap | /kl test | /kl findach <text> | /kl ach <bossKey> <id> | /kl aotcword <text>")
+    Print("/kl  open | /kl undo | /kl minimap | /kl viewers | /kl test | /kl findach <text> | /kl ach <bossKey> <id> | /kl aotcword <text>")
   end
 end

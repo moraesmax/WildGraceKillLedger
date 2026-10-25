@@ -10,4 +10,5 @@ Data.lua
 Core.lua
 UI.lua
 UI_Panels.lua
+Viewers.lua
 MinimapButton.lua

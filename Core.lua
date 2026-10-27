@@ -34,6 +34,9 @@ local function InitDB()
   DB.learnedAch = DB.learnedAch or {}
   DB.achOverride = DB.achOverride or {}
   DB.aotcWords = DB.aotcWords or {}
+  for _, tbl in ipairs({ DB.learnedAch, DB.achOverride }) do   -- older versions stored a single ID
+    for key, val in pairs(tbl) do if type(val) == "number" then tbl[key] = { [val] = true } end end
+  end
   for _, k in ipairs(DB.kills) do
     if k.adjust == nil then k.adjust = (k.aotc or 0) - #(k.who or {}) end
   end
@@ -142,31 +145,41 @@ local function FindBoss(encID, encName)
 end
 
 -- ---------------------------------------------------------------- AOTC detection
-local function LooksLikeAotc(boss, achID, achName)
-  local forced = DB.achOverride[boss.key] or DB.learnedAch[boss.key]
-  if forced then return forced == achID end
-  local n = KL.Norm(achName)
-  if not n:find(KL.Norm(boss.name), 1, true) then return false end
-  local words = {}
-  for _, w in ipairs(KL.AotcWords) do words[#words + 1] = w end
-  for _, w in ipairs(DB.aotcWords) do words[#words + 1] = w end
+-- A boss can have several achievements worth counting (for example "Ahead of the Curve: X" and
+-- "Heroic: X"). Any of them counts, but each player is only counted once per kill (see RegisterAchievement).
+local function NameMatches(bossName, achName)
+  local n, full = KL.Norm(achName), KL.Norm(bossName)
+  if full ~= "" and n:find(full, 1, true) then return true end
+  local short = KL.Norm((tostring(bossName):match("^([^,]+)")) or "")   -- "Sikran, Captain of the Sureki" -> "Sikran"
+  return #short >= 4 and short ~= full and n:find(short, 1, true) ~= nil
+end
+
+local function WordMatches(achName)
   local lower = tostring(achName or ""):lower()
-  for _, w in ipairs(words) do
-    if lower:find(w, 1, true) then return true end
-  end
+  for _, w in ipairs(KL.AotcWords) do if lower:find(w, 1, true) then return true end end
+  for _, w in ipairs(DB.aotcWords) do if lower:find(w, 1, true) then return true end end
   return false
+end
+
+local function IsTrackedAchievement(boss, achID, achName)
+  local o, l = DB.achOverride[boss.key], DB.learnedAch[boss.key]
+  if (o and o[achID]) or (l and l[achID]) then return true end
+  return NameMatches(boss.name, achName) and WordMatches(achName)
 end
 
 local function RegisterAchievement(achID, who)
   local w = KL.watch
   if not w or GetTime() > w.expires or not achID then return end
   local achName = select(2, GetAchievementInfo(achID))
-  if not achName or not LooksLikeAotc(w.boss, achID, achName) then return end
-  DB.learnedAch[w.boss.key] = DB.learnedAch[w.boss.key] or achID
-  local short = (strsplit("-", who))
-  if w.seen[short] then return end
-  w.seen[short] = true
+  if not achName or not IsTrackedAchievement(w.boss, achID, achName) then return end
+  DB.learnedAch[w.boss.key] = DB.learnedAch[w.boss.key] or {}
+  DB.learnedAch[w.boss.key][achID] = true
   local k = w.kill
+  k.ach = k.ach or {}
+  k.ach[achName] = true
+  local short = (strsplit("-", who))
+  if w.seen[short] then return end   -- already counted this player for this kill (e.g. earned both achievements)
+  w.seen[short] = true
   k.who[#k.who + 1] = who
   KL.Recount(k)
   if KL.UI and KL.UI.UpdateToast then KL.UI.UpdateToast(k) end
@@ -392,9 +405,14 @@ SlashCmdList["KILLLEDGER"] = function(msg)
   elseif cmd == "aotcword" and rest ~= "" then
     DB.aotcWords[#DB.aotcWords + 1] = rest:lower(); Print("added match word: " .. rest:lower())
   elseif cmd == "ach" then
-    local key, id = rest:match("^(%S+)%s+(%d+)$")
-    if not key then return Print("usage: /kl ach <bossKey> <achievementID>   (keys are in Data.lua)") end
-    DB.achOverride[key] = tonumber(id); Print("achievement for " .. key .. " set to " .. id)
+    local key, arg = rest:match("^(%S+)%s+(%S+)$")
+    if not key then return Print("usage: /kl ach <bossKey> <achievementID>  or  /kl ach <bossKey> clear   (boss keys look like ej:1234)") end
+    if arg == "clear" then DB.achOverride[key] = nil; return Print("forced achievements cleared for " .. key) end
+    local id = tonumber(arg)
+    if not id then return Print("the achievement ID must be a number.") end
+    DB.achOverride[key] = DB.achOverride[key] or {}
+    DB.achOverride[key][id] = true
+    Print("achievement " .. id .. " will now count for " .. key)
   elseif cmd == "findach" and rest ~= "" then
     local needle, id, found = KL.Norm(rest), 0, 0
     local function scan()

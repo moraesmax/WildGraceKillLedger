@@ -349,6 +349,7 @@ local function BuildDetail()
 
   UI.Label(d, "Kill details", "GameFontNormalLarge"):SetPoint("TOPLEFT", 16, -132)
   d.info = UI.Label(d, "", "GameFontHighlightSmall"); d.info:SetPoint("TOPLEFT", 16, -158); d.info:SetWidth(398)
+  d.achLine = UI.Label(d, "", "GameFontHighlightSmall"); d.achLine:SetPoint("TOPLEFT", 16, -174); d.achLine:SetWidth(398)
   d.whoHead = UI.Label(d, "", "GameFontHighlightSmall"); d.whoHead:SetPoint("TOPLEFT", 16, -196)
   d.pills = {}
   d.noWho = UI.Label(d, "", "GameFontHighlightSmall"); d.noWho:SetPoint("TOPLEFT", 16, -220); d.noWho:SetWidth(398)
@@ -396,7 +397,11 @@ function UI.RefreshDetail()
   d.sub:SetText(counting and "Counting AOTCs, updates live..." or ((k.raid or "") .. " - logged to Wild Grace Kill Ledger"))
   d.big:SetText("+" .. k.aotc)
   d.info:SetText(("%s  -  %s"):format(date("%a %b %d, %H:%M", k.ts), k.raid or "?"))
-  d.whoHead:SetText(MUTED .. ("AOTC EARNED BY (%d DETECTED)"):format(#k.who) .. "|r")
+  local names = {}
+  for name in pairs(k.ach or {}) do names[#names + 1] = name end
+  table.sort(names)
+  d.achLine:SetText(#names > 0 and (MUTED .. "Counted from: " .. table.concat(names, ", ") .. "|r") or "")
+  d.whoHead:SetText(MUTED .. ("EARNED BY (%d DETECTED)"):format(#k.who) .. "|r")
   -- name pills
   for _, pl in ipairs(d.pills) do pl:Hide() end
   local x, y, maxw = 0, 0, 398
